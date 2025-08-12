@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrera de Patos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(-1deg); }
+            50% { transform: translateY(-3px) rotate(1deg); }
+        }
+        @keyframes winner-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
+            50% { box-shadow: 0 0 30px rgba(255, 215, 0, 1); }
+        }
+        @keyframes confetti {
+            0% { transform: translateY(0) rotateZ(0deg); opacity: 1; }
+            100% { transform: translateY(-100px) rotateZ(720deg); opacity: 0; }
+        }
+        .duck-float { 
+            animation: float 2s ease-in-out infinite;
+            transition: left 0.3s ease-out;
+        }
+        .winner-glow { animation: winner-glow 1s ease-in-out infinite; }
+        .water-bg {
+            background: linear-gradient(180deg, #0EA5E9 0%, #0284C7 50%, #0369A1 100%);
+            position: relative;
+        }
+        .finish-line {
+            background: repeating-linear-gradient(
+                90deg,
+                #000,
+                #000 15px,
+                #fff 15px,
+                #fff 30px
+            );
+        }
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #FFD700;
+            animation: confetti 2s ease-out forwards;
+        }
+        .duck-image {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+        }
+        .duck-selector {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .duck-selector:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .duck-selector.selected {
+            border: 3px solid #FFD700;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-sky-200 via-sky-300 to-blue-400 min-h-screen">
+    
+    <!-- Modal para agregar jugadores -->
+    <div id="playerSetupModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-8 max-w-4xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h2 class="text-4xl font-bold text-center mb-6 text-gray-800">🦆 CONFIGURAR JUGADORES 🦆</h2>
+            
+            <!-- Jugadores actuales -->
+            <div class="mb-6">
+                <h3 class="text-2xl font-bold mb-4 text-center">Jugadores Registrados: <span id="playerCountDisplay">0</span></h3>
+                <div id="playersList" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
+                    <!-- Lista de jugadores se mostrará aquí -->
+                </div>
+            </div>
+            
+            <!-- Agregar nuevo jugador -->
+            <div class="border-t pt-6">
+                <h3 class="text-xl font-bold mb-4 text-center">Agregar Nuevo Jugador</h3>
+                
+                <div class="flex flex-col items-center gap-4">
+                    <input type="text" id="newPlayerName" placeholder="Nombre del jugador" maxlength="12" 
+                           class="text-xl border-2 border-gray-300 rounded-xl px-4 py-3 text-center font-bold focus:border-blue-500 focus:outline-none">
+                    
+                    <!-- Selector de colores/patos -->
+                    <div class="w-full">
+                        <p class="text-lg font-semibold mb-3 text-center">Elige tu pato:</p>
+                        <div id="duckColorSelector" class="grid grid-cols-4 md:grid-cols-6 gap-3 justify-items-center">
+                            <!-- Los patos se generarán aquí -->
+                        </div>
+                        <div id="selectedDuckPreview" class="mt-4 text-center hidden">
+                            <p class="text-sm text-gray-600 mb-2">Pato seleccionado:</p>
+                            <div id="previewDuck" class="flex justify-center"></div>
+                        </div>
+                    </div>
+                    
+                    <button id="addPlayerBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 text-lg disabled:opacity-50" disabled>
+                        ➕ Agregar Jugador
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-center gap-4">
+                <button id="startGameBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 text-lg disabled:opacity-50" disabled>
+                    🚀 COMENZAR JUEGO
+                </button>
+                <button id="clearAllBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 text-lg">
+                    🗑️ Limpiar Todo
+                </button>
+            </div>
+            
+            <p class="text-sm text-gray-600 text-center mt-4">
+                Mínimo 2 jugadores para comenzar • Máximo 20 jugadores
+            </p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="bg-white/95 backdrop-blur-sm border-b-4 border-blue-600 shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="text-center">
+                <h1 class="text-5xl font-bold text-blue-800 mb-4 tracking-wide">
+                    🏁 CARRERA DE PATOS 🏁
+                </h1>
+                
+                <div class="flex flex-col sm:flex-row justify-center items-center gap-6">
+                    <div class="bg-black text-green-400 font-mono text-3xl px-6 py-3 rounded-xl border-2 border-green-500 shadow-lg">
+                        ⏱️ <span id="timer">00:00</span>
+                    </div>
+                    <div class="bg-purple-600 text-white font-bold text-xl px-4 py-3 rounded-xl shadow-lg">
+                        👥 <span id="gamePlayerCount">0</span> jugadores
+                    </div>
+                    <button id="startBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-2xl text-xl">
+                        🚀 INICIAR CARRERA
+                    </button>
+                    <button id="resetBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-2xl text-xl">
+                        🔄 NUEVA CARRERA
+                    </button>
+                    <button id="setupPlayersBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-2xl text-xl">
+                        ⚙️ CONFIGURAR
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pista de carrera -->
+    <div class="container mx-auto px-4 py-8">
+        <div class="water-bg rounded-3xl p-6 shadow-2xl border-4 border-blue-700">
+            <!-- Línea de salida -->
+            <div class="bg-green-500 h-6 rounded-t-lg mb-1 flex items-center justify-center">
+                <span class="text-white font-bold text-sm">🟢 SALIDA 🟢</span>
+            </div>
+            
+            <!-- Pistas de los patos -->
+            <div id="raceTrack" class="space-y-4 py-4">
+                <div class="text-center py-8">
+                    <p class="text-white text-2xl mb-4">¡Configura los jugadores para comenzar!</p>
+                    <button onclick="document.getElementById('setupPlayersBtn').click()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300">
+                        ⚙️ Configurar Jugadores
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Línea de meta -->
+            <div class="finish-line h-8 rounded-b-lg mt-1 flex items-center justify-center">
+                <span class="text-white font-bold text-lg bg-black/80 px-4 py-1 rounded shadow-lg">🏁 META 🏁</span>
+            </div>
+        </div>
+        
+        <!-- Ranking en vivo -->
+        <div class="bg-white/95 backdrop-blur-sm rounded-2xl p-6 mt-6 shadow-xl border-2 border-blue-300">
+            <h3 class="text-3xl font-bold text-center mb-4 text-gray-800">🏆 POSICIONES EN VIVO</h3>
+            <p class="text-center text-green-600 text-lg font-semibold mb-4">
+                (Recuerda: ¡Haz clic para retroceder y quedar MÁS ATRÁS para ganar!)
+            </p>
+            <div id="liveRanking" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <p class="text-center text-gray-600 col-span-full">Configura los jugadores para ver las posiciones</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de fin de carrera -->
+    <div id="gameOverModal" class="fixed inset-0 bg-black/80 flex items-center justify-center hidden z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-8 max-w-2xl mx-4 shadow-2xl transform scale-95 transition-all duration-500 relative overflow-hidden">
+            <div id="confetti-container" class="absolute inset-0 pointer-events-none"></div>
+            <h2 class="text-4xl font-bold text-center mb-6 text-gray-800">🏁 ¡CARRERA TERMINADA! 🏁</h2>
+            <div id="raceResults" class="text-center mb-8"></div>
+            <button onclick="closeModal()" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 text-xl shadow-lg">
+                ✨ Cerrar Resultados
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Array de jugadores dinámico
+        let players = [];
+
+        // Colores y estilos disponibles para los patos
+        const availableStyles = [
+            { name: "Dorado", color: "bg-yellow-300", textColor: "text-yellow-900", duckColor: "#FFD700" },
+            { name: "Rosa", color: "bg-pink-300", textColor: "text-pink-900", duckColor: "#FF69B4" },
+            { name: "Morado", color: "bg-purple-300", textColor: "text-purple-900", duckColor: "#9370DB" },
+            { name: "Naranja", color: "bg-orange-300", textColor: "text-orange-900", duckColor: "#FF6B35" },
+            { name: "Rojo", color: "bg-red-300", textColor: "text-red-900", duckColor: "#FF1493" },
+            { name: "Verde", color: "bg-green-300", textColor: "text-green-900", duckColor: "#32CD32" },
+            { name: "Azul", color: "bg-blue-300", textColor: "text-blue-900", duckColor: "#1E90FF" },
+            { name: "Índigo", color: "bg-indigo-300", textColor: "text-indigo-900", duckColor: "#4B0082" },
+            { name: "Cian", color: "bg-cyan-300", textColor: "text-cyan-900", duckColor: "#00CED1" },
+            { name: "Lima", color: "bg-lime-300", textColor: "text-lime-900", duckColor: "#32CD32" },
+            { name: "Ámbar", color: "bg-amber-300", textColor: "text-amber-900", duckColor: "#FFA500" },
+            { name: "Esmeralda", color: "bg-emerald-300", textColor: "text-emerald-900", duckColor: "#50C878" },
+            { name: "Violeta", color: "bg-violet-300", textColor: "text-violet-900", duckColor: "#8A2BE2" },
+            { name: "Fucsia", color: "bg-fuchsia-300", textColor: "text-fuchsia-900", duckColor: "#FF00FF" },
+            { name: "Turquesa", color: "bg-teal-300", textColor: "text-teal-900", duckColor: "#40E0D0" },
+            { name: "Coral", color: "bg-rose-300", textColor: "text-rose-900", duckColor: "#FF7F50" },
+            { name: "Lavanda", color: "bg-slate-300", textColor: "text-slate-900", duckColor: "#E6E6FA" },
+            { name: "Menta", color: "bg-green-200", textColor: "text-green-800", duckColor: "#98FB98" },
+            { name: "Durazno", color: "bg-orange-200", textColor: "text-orange-800", duckColor: "#FFCBA4" },
+            { name: "Cielo", color: "bg-sky-300", textColor: "text-sky-900", duckColor: "#87CEEB" }
+        ];
+
+        let selectedStyleIndex = -1;
+        let gameState = {
+            isPlaying: false,
+            raceStartTime: null,
+            playerProgress: {},
+            playerSpeeds: {},
+            playerClicks: {},
+            raceInterval: null,
+            finishedPlayers: [],
+            raceFinished: false
+        };
+
+        const TRACK_LENGTH = 90;
+
+        function createDuckSVG(color) {
+            return `
+                <svg width="50" height="50" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="45" cy="60" rx="25" ry="20" fill="${color}" stroke="#000" stroke-width="2"/>
+                    <circle cx="35" cy="35" r="18" fill="${color}" stroke="#000" stroke-width="2"/>
+                    <ellipse cx="20" cy="38" rx="8" ry="4" fill="#FFA500" stroke="#000" stroke-width="1"/>
+                    <circle cx="30" cy="30" r="3" fill="#000"/>
+                    <circle cx="31" cy="29" r="1" fill="#FFF"/>
+                    <ellipse cx="50" cy="55" rx="8" ry="12" fill="${color}" stroke="#000" stroke-width="1.5" transform="rotate(20 50 55)"/>
+                    <ellipse cx="45" cy="85" rx="20" ry="8" fill="rgba(0,0,0,0.2)"/>
+                </svg>
+            `;
+        }
+
+        function initializeDuckSelector() {
+            const selector = document.getElementById('duckColorSelector');
+            selector.innerHTML = '';
+            
+            availableStyles.forEach((style, index) => {
+                const isUsed = players.some(p => p.styleIndex === index);
+                const duckDiv = document.createElement('div');
+                duckDiv.className = `duck-selector p-3 rounded-xl border-2 ${style.color} ${isUsed ? 'opacity-50 cursor-not-allowed' : 'border-gray-300 hover:border-gray-400'}`;
+                duckDiv.innerHTML = `
+                    <div class="flex flex-col items-center">
+                        ${createDuckSVG(style.duckColor)}
+                        <span class="text-xs font-bold ${style.textColor} mt-1">${style.name}</span>
+                    </div>
+                `;
+                
+                if (!isUsed) {
+                    duckDiv.onclick = () => selectDuckStyle(index);
+                }
+                
+                selector.appendChild(duckDiv);
+            });
+        }
+
+        function selectDuckStyle(index) {
+            selectedStyleIndex = index;
+            
+            // Remover selección previa
+            document.querySelectorAll('.duck-selector').forEach(el => el.classList.remove('selected'));
+            
+            // Marcar como seleccionado
+            document.querySelectorAll('.duck-selector')[index].classList.add('selected');
+            
+            // Mostrar preview
+            const preview = document.getElementById('selectedDuckPreview');
+            const previewDuck = document.getElementById('previewDuck');
+            preview.classList.remove('hidden');
+            previewDuck.innerHTML = createDuckSVG(availableStyles[index].duckColor);
+            
+            checkAddPlayerButton();
+        }
+
+        function checkAddPlayerButton() {
+            const name = document.getElementById('newPlayerName').value.trim();
+            const btn = document.getElementById('addPlayerBtn');
+            btn.disabled = !(name.length >= 2 && selectedStyleIndex >= 0);
+        }
+
+        function addPlayer() {
+            const name = document.getElementById('newPlayerName').value.trim();
+            if (name.length < 2 || selectedStyleIndex < 0) return;
+            
+            // Verificar si el nombre ya existe
+            if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+                alert('¡Ese nombre ya está en uso! Elige otro.');
+                return;
+            }
+            
+            // Agregar jugador
+            const newPlayer = {
+                name: name,
+                styleIndex: selectedStyleIndex,
+                ...availableStyles[selectedStyleIndex]
+            };
+            
+            players.push(newPlayer);
+            
+            // Limpiar formulario
+            document.getElementById('newPlayerName').value = '';
+            selectedStyleIndex = -1;
+            document.getElementById('selectedDuckPreview').classList.add('hidden');
+            
+            updatePlayersDisplay();
+            initializeDuckSelector();
+            checkAddPlayerButton();
+        }
+
+        function removePlayer(index) {
+            players.splice(index, 1);
+            updatePlayersDisplay();
+            initializeDuckSelector();
+        }
+
+        function updatePlayersDisplay() {
+            const list = document.getElementById('playersList');
+            const count = document.getElementById('playerCountDisplay');
+            const gameCount = document.getElementById('gamePlayerCount');
+            const startGameBtn = document.getElementById('startGameBtn');
+            
+            count.textContent = players.length;
+            gameCount.textContent = players.length;
+            
+            if (players.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500 col-span-full">No hay jugadores registrados</p>';
+                startGameBtn.disabled = true;
+            } else {
+                list.innerHTML = players.map((player, index) => `
+                    <div class="flex items-center justify-between p-3 ${player.color} rounded-xl border border-gray-300">
+                        <div class="flex items-center gap-3">
+                            ${createDuckSVG(player.duckColor)}
+                            <span class="font-bold ${player.textColor}">${player.name}</span>
+                        </div>
+                        <button onclick="removePlayer(${index})" class="bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600">
+                            ❌
+                        </button>
+                    </div>
+                `).join('');
+                
+                startGameBtn.disabled = players.length < 2;
+            }
+        }
+
+        function startGameSetup() {
+            if (players.length < 2) {
+                alert('Necesitas al menos 2 jugadores para comenzar.');
+                return;
+            }
+            
+            document.getElementById('playerSetupModal').classList.add('hidden');
+            initializeGame();
+        }
+
+        function showPlayerSetup() {
+            document.getElementById('playerSetupModal').classList.remove('hidden');
+            initializeDuckSelector();
+            updatePlayersDisplay();
+        }
+
+        function clearAllPlayers() {
+            if (confirm('¿Estás seguro de que quieres eliminar todos los jugadores?')) {
+                players = [];
+                selectedStyleIndex = -1;
+                updatePlayersDisplay();
+                initializeDuckSelector();
+            }
+        }
+
+        function initializeGame() {
+            const raceTrack = document.getElementById('raceTrack');
+            raceTrack.innerHTML = '';
+            
+            if (players.length === 0) {
+                raceTrack.innerHTML = `
+                    <div class="text-center py-8">
+                        <p class="text-white text-2xl mb-4">¡Configura los jugadores para comenzar!</p>
+                        <button onclick="showPlayerSetup()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300">
+                            ⚙️ Configurar Jugadores
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            players.forEach((player, index) => {
+                gameState.playerProgress[player.name] = 0;
+                gameState.playerSpeeds[player.name] = Math.random() * 0.3 + 0.2;
+                gameState.playerClicks[player.name] = 0;
+                
+                const track = document.createElement('div');
+                track.className = 'relative h-20 rounded-xl border-2 border-white/30 overflow-hidden bg-blue-100/30';
+                track.innerHTML = `
+                    <div class="absolute left-2 top-2 ${player.color} px-3 py-1 rounded-lg border border-gray-400 shadow-sm">
+                        <span class="font-bold ${player.textColor} text-sm">${player.name}</span>
+                        <span class="ml-2 text-xs bg-white/50 px-1 rounded">Clics: <span id="clicks-${player.name}">0</span></span>
+                    </div>
+                    
+                    <div id="duck-${player.name}" class="absolute top-1/2 transform -translate-y-1/2 duck-float z-10 cursor-pointer hover:scale-110 transition-transform duration-200" 
+                         style="left: 2%; animation-delay: ${index * 0.2}s;"
+                         onclick="duckClick('${player.name}')"
+                         title="¡Haz clic para retroceder!">
+                        ${createDuckSVG(player.duckColor)}
+                    </div>
+                    
+                    <div class="absolute right-2 bottom-2 bg-white/80 px-2 py-1 rounded text-xs font-mono">
+                        <span id="progress-${player.name}">0%</span>
+                    </div>
+                    
+                    <div class="absolute bottom-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-300/50 to-blue-400/50 rounded-b-xl"></div>
+                `;
+                raceTrack.appendChild(track);
+            });
+            
+            gameState.finishedPlayers = [];
+            gameState.raceFinished = false;
+            updateRanking();
+        }
+
+        // Resto de las funciones del juego (sin cambios)
+        function duckClick(playerName) {
+            if (!gameState.isPlaying || gameState.raceFinished) return;
+            
+            gameState.playerClicks[playerName]++;
+            document.getElementById(`clicks-${playerName}`).textContent = gameState.playerClicks[playerName];
+            
+            gameState.playerProgress[playerName] = Math.max(0, gameState.playerProgress[playerName] - (Math.random() * 8 + 5));
+            
+            const duckElement = document.getElementById(`duck-${playerName}`);
+            const progressElement = document.getElementById(`progress-${playerName}`);
+            
+            const position = Math.min(gameState.playerProgress[playerName], TRACK_LENGTH);
+            duckElement.style.left = `${2 + (position / TRACK_LENGTH) * 85}%`;
+            progressElement.textContent = `${Math.floor(position)}%`;
+            
+            duckElement.style.transform = 'translateY(-50%) scale(1.2) rotate(-10deg)';
+            setTimeout(() => {
+                duckElement.style.transform = 'translateY(-50%) scale(1) rotate(0deg)';
+            }, 200);
+            
+            const waves = document.createElement('div');
+            waves.className = 'absolute inset-0 bg-blue-300/30 rounded-xl pointer-events-none';
+            waves.style.animation = 'ripple 0.8s ease-out';
+            duckElement.parentElement.appendChild(waves);
+            setTimeout(() => waves.remove(), 800);
+            
+            updateRanking();
+        }
+
+        function startRace() {
+            if (players.length < 2) {
+                alert('Necesitas al menos 2 jugadores para iniciar la carrera.');
+                return;
+            }
+            
+            gameState.isPlaying = true;
+            gameState.raceStartTime = Date.now();
+            gameState.finishedPlayers = [];
+            gameState.raceFinished = false;
+            
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50');
+            startBtn.innerHTML = '🏃‍♂️ CORRIENDO...';
+            
+            const timerInterval = setInterval(() => {
+                if (!gameState.isPlaying) {
+                    clearInterval(timerInterval);
+                    return;
+                }
+                const elapsed = Math.floor((Date.now() - gameState.raceStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('timer').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+            
+            gameState.raceInterval = setInterval(() => {
+                let someoneFinished = false;
+                
+                players.forEach(player => {
+                    if (gameState.finishedPlayers.find(p => p.name === player.name)) return;
+                    
+                    const speedVariation = (Math.random() - 0.5) * 0.2;
+                    const currentSpeed = gameState.playerSpeeds[player.name] + speedVariation;
+                    
+                    gameState.playerProgress[player.name] += Math.max(0.1, currentSpeed);
+                    
+                    const duckElement = document.getElementById(`duck-${player.name}`);
+                    const progressElement = document.getElementById(`progress-${player.name}`);
+                    
+                    const position = Math.min(gameState.playerProgress[player.name], TRACK_LENGTH);
+                    duckElement.style.left = `${2 + (position / TRACK_LENGTH) * 85}%`;
+                    progressElement.textContent = `${Math.floor(position)}%`;
+                    
+                    if (gameState.playerProgress[player.name] >= TRACK_LENGTH) {
+                        gameState.finishedPlayers.push({
+                            name: player.name,
+                            position: gameState.finishedPlayers.length + 1,
+                            time: Date.now() - gameState.raceStartTime,
+                            clicks: gameState.playerClicks[player.name]
+                        });
+                        
+                        duckElement.style.filter = 'grayscale(100%) brightness(0.7)';
+                        someoneFinished = true;
+                    }
+                });
+                
+                updateRanking();
+                
+                if (gameState.finishedPlayers.length >= players.length - 1 || 
+                    Date.now() - gameState.raceStartTime > 60000) {
+                    finishRace();
+                }
+                
+            }, 100);
+        }
+
+        function updateRanking() {
+            const ranking = document.getElementById('liveRanking');
+            
+            if (players.length === 0) {
+                ranking.innerHTML = '<p class="text-center text-gray-600 col-span-full">Configura los jugadores para ver las posiciones</p>';
+                return;
+            }
+            
+            const currentStandings = players.map(player => {
+                const finished = gameState.finishedPlayers.find(p => p.name === player.name);
+                return {
+                    name: player.name,
+                    progress: Math.floor(gameState.playerProgress[player.name] || 0),
+                    finished: finished ? finished.position : null,
+                    clicks: gameState.playerClicks[player.name] ||
